@@ -1,0 +1,338 @@
+# 1.1 Obtaining the data
+import requests, json
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import statistics as stats
+import pandas as pd
+from sklearn.cluster import KMeans
+
+%run APIkeys.py
+app_id = os.environ['EDAMAM_API_id']
+key = os.environ['EDAMAM_API_key']
+baseURL = 'https://api.edamam.com/api/food-database/v2/parser?app_id='+app_id+'&app_key='+key+'&upc='
+endURL = '&nutrition-type=cooking&category=packaged-foods'
+def checkUPC_V2(upc):
+    app_id = os.environ['EDAMAM_API_id']
+    key = os.environ['EDAMAM_API_key']
+    baseURL = 'https://api.edamam.com/api/food-database/v2/parser?app_id='+app_id+'&app_key='+key+'&upc='
+    endURL = '&nutrition-type=cooking&category=packaged-foods'
+    url = baseURL + upc + endURL
+    info = requests.get(url).json()
+    if 'error' in info:
+        return info
+    else:
+        answer = info['hints'][0]['food']['nutrients']
+        
+        sizeList = info['hints'][0]['food']['servingSizes']
+        n = len(sizeList)
+        for i in range(n):
+            if sizeList[i]['label'] == 'Gram':
+                answer['servingSize_gram'] = info['hints'][0]['food']['servingSizes'][i]['quantity']
+            if sizeList[i]['label'] == 'Cup':
+                answer['servingSize_cup'] = info['hints'][0]['food']['servingSizes'][i]['quantity']
+        
+        answer['label'] = info['hints'][0]['food']['label']
+        answer['upc'] = upc
+        return answer
+f = open('cereal_WholeFoods.json')
+data = json.load(f)
+f.close()
+pd.DataFrame(data['cereal'])
+def multiUPC(shelf):
+    a = []
+    for upc in shelf:
+        info = checkUPC_V2(upc)
+        if 'error' in info:
+            print('UPC ',upc, ' does not exist in the API\'s data base')
+        else:
+            print('UPC ',upc, ' exists in the API\'s data base')
+            a.append(info)
+    return a
+def multiUPC_V2(shelf, verbose = False, leftovers = False, source=""):
+    
+    # Shelf - a list of strings, each representing a UPC code
+    # verbose - boolean telling the function whether to print found/unfound UPCs
+    # leftovers - boolean telling the function whetehr to output the 
+    
+    found = []    #container for information on found UPCS
+    unfound = []  #container for unfound UPCs
+    
+    # loop over UPCs in shelf
+    for upc in shelf:
+        info = checkUPC_V2(upc)
+        
+        if 'error' in info:
+            unfound.append(upc) #add to the unfound container
+            if verbose:
+                print('UPC ',upc, ' does not exist in the API\'s data base')
+        
+        else:
+            if verbose:
+                print('UPC ',upc, ' exists in the API\'s data base')
+            found.append(info)
+    
+    # turn the dictionary found into aDataframe
+    if len(found)>0:
+        df_found = pd.DataFrame(found)
+    else:
+        df_found = pd.DataFrame()
+    
+    # add a source column
+    df_found["dataSource"] = pd.Series([source for i in range(len(df_found.index))])
+    
+    
+    # return the values of found and unfound (optional)
+    if leftovers:
+        return df_found,unfound
+    else:
+        return df_found
+
+def readCerealFile(fileName,source = ""):
+    f = open(fileName)
+    data = json.load(f)
+    if type(data) == dict:
+            df = pd.DataFrame(data['cereal'])
+            df["dataSource"] = pd.Series([source for i in range(len(df.index))]) # add a source column
+            return df
+    else:
+        print("File doesn't contain a list")
+        df = pd.DataFrame() 
+        return df
+
+df_WholeFoods = readCerealFile('cereal_WholeFoods.json', source = "WholeFoods")
+df_WholeFoods
+shelf_Wegmans = ['41653456783','884912004710']
+df_Wegmans,leftover_Wegmans = multiUPC_V2(shelf_Wegmans, source = "Wegmans", verbose = True, leftovers = True)
+
+
+def multiUPC_V2(shelf, verbose = False, leftovers = False, source=""):
+    
+    # Shelf - a list of strings, each representing a UPC code
+    # verbose - boolean telling the function whether to print found/unfound UPCs
+    # leftovers - boolean telling the function whetehr to output the 
+    
+    found = []    #container for information on found UPCS
+    unfound = []  #container for unfound UPCs
+    
+    # loop over UPCs in shelf
+    for upc in shelf:
+        info = checkUPC_V2(upc)
+        
+        if 'error' in info:
+            unfound.append(upc) #add to the unfound container
+            if verbose:
+                print('UPC ',upc, ' does not exist in the API\'s data base')
+        
+        else:
+            if verbose:
+                print('UPC ',upc, ' exists in the API\'s data base')
+            found.append(info)
+    
+    # turn the dictionary found into aDataframe
+    if len(found)>0:
+        df_found = pd.DataFrame(found)
+    else:
+        df_found = pd.DataFrame()
+    
+    # add a source column
+    df_found["dataSource"] = pd.Series([source for i in range(len(df_found.index))])
+    
+    
+    # return the values of found and unfound (optional)
+    if leftovers:
+        return df_found,unfound
+    else:
+        return df_found
+
+shelf_Osco = ['884912273116','038000200748','018627703716']
+df_Osco,leftover_Osco = multiUPC_V2(shelf_Osco, source = "Osco", verbose = True, leftovers = True)
+
+shelf_eagle = ['00016000103719', '00016000487932', '00016000152335']
+df_eagle,leftover_eagle = multiUPC_V2(shelf_eagle, source = "Giant Eagle", verbose = True, leftovers = True)
+
+shelf_GM = ['016000139626', '016000141544', '016000124998', '016000275157', '016000140240', '016000141551', '016000141568', '016000275294', '016000275546', '016000275690', '016000434714']
+df_GM,leftover_GM = multiUPC_V2(shelf_GM, source = "General Mills", verbose = True, leftovers = True)
+
+df_Osco,leftover_Osco = multiUPC_V2(shelf_Osco, source = "Osco", leftovers = True)
+
+
+combined = pd.concat([df_Osco,df_Wegmans, df_GM, df_eagle],axis=0, ignore_index = True)
+combined
+
+try1 = pd.concat([combined,df_WholeFoods, df_GM, df_eagle], axis=0, ignore_index = True)
+try1
+
+try1.describe()
+
+data = try1[['ENERC_KCAL', 'FAT', 'FASAT', 'FATRN', 'SUGAR', 'CHOLE', 'NA', 'P']]
+data = data.dropna()
+data
+len(data)
+
+
+fig, axs = plt.subplots(1, 2, squeeze=False, figsize=(18,9)) # ,                        subplot_kw = dict(polar = True))
+
+axs[0,0].scatter(data['SUGAR'], data['ENERC_KCAL'])
+axs[0,0].set_title("Sugar vs. Energy")
+axs[0,0].set_xlabel("Sugar")
+axs[0,0].set_ylabel("Energy")
+
+axs[0,1].scatter(data['FAT'], data['ENERC_KCAL'])
+axs[0,1].set_title("FAT vs. Energy")
+axs[0,1].set_xlabel("FAT")
+axs[0,1].set_ylabel("Energy")
+
+fig.suptitle('Product differentiation')
+plt.show()
+
+fig, axs = plt.subplots(1, 2, squeeze=False, figsize=(18,9)) # ,                        subplot_kw = dict(polar = True))
+
+axs[0,0].scatter(data['NA'], data['ENERC_KCAL'])
+axs[0,0].set_title("Sodium vs. Energy")
+axs[0,0].set_xlabel("Protein")
+axs[0,0].set_ylabel("Energy")
+
+axs[0,1].scatter(data['FAT'], data['P'])
+axs[0,1].set_title("FAT vs. P")
+axs[0,1].set_xlabel("P")
+axs[0,1].set_ylabel("Protein")
+
+
+fig.suptitle('Product differentiation')
+plt.show()
+
+features = ['FAT','ENERC_KCAL']
+small_df = data[features]
+
+plt.scatter(data=data, x=features[0], y=features[1])
+plt.title("Cereals sold in the database")
+plt.xlabel(features[0])
+plt.ylabel(features[1])
+
+plt.show()
+
+k = 4 #more on how to choose k appears later in this notebook
+n = 98
+kmeans = KMeans(n_clusters=k, init='k-means++', random_state=0).fit(small_df)
+# Note:  K-means++ is a version of K-means algorithm which is more efficient
+
+plt.scatter(data=data, x=features[0], y=features[1],c=kmeans.labels_)
+plt.scatter(kmeans.cluster_centers_[:,0], kmeans.cluster_centers_[:,1],marker="X", c="r", s=80, label="centroids")
+plt.title(f"Position of {n} cereals in {k} clusters")
+plt.xlabel(features[0])
+plt.ylabel(features[1])
+plt.show()
+
+n, c = data.shape
+
+def  rescaleFeatures(df_in):
+    # This function rescale all the columns in dataframe df_in to be
+    # between 0 and 1. It returns the scaled dataframe as well as the
+    # lists of minimum and the maximum (so we can rescale back)
+
+    df_out = df_in # first, we make a copy of the original df
+    m = df_out.min() # a list of minimums for all columns in df_in
+    M = df_out.max() # a list of maximums for all columns in df_in
+    for i in range(len(df_out.columns)):
+        df_out.iloc[:,i] = (df_out.iloc[:,i] - m[i])/(M[i]-m[i])
+    
+    return df_out,m,M
+
+def upscaleCentroids(centroids_in,m,M):
+    # This function takes the list of centroids resulting from a Kmeans procedure
+    # that was perfomed on a scaled data set and scale these centroids back to
+    # the original values. This function is a little bit cumbersome because of 
+    # the weird structure of the output from the kmeans package. 
+    
+    centroid_out = centroids_in
+    n_centroids = len(centroids_in) 
+    n_features = len(centroids_in[0])
+    for i in range(n_centroids):
+        for j in range(n_features):
+            centroid_out[i][j] = (centroid_out[i][j] )*(M[j]-m[j]) + m[j] 
+    
+    return centroid_out
+
+df1,m,M = rescaleFeatures(small_df)
+
+k = 5
+kmeans1 = KMeans(n_clusters=k, init='k-means++', random_state=0).fit(df1)
+
+centroids1 = upscaleCentroids(kmeans1.cluster_centers_,m,M)
+centroids1
+
+plt.scatter(data=data, x=features[0], y=features[1],c=kmeans1.labels_)
+plt.scatter(centroids1[:,0], centroids1[:,1],marker="X", c="r", s=80, label="centroids")
+plt.title(f"Position of {n} cereals in {k} clusters")
+plt.xlabel(features[0])
+plt.ylabel(features[1])
+plt.show()
+
+inertia = []
+n_clusters = []
+for i in range(1,13):
+    kmeans = KMeans(n_clusters=i, init='k-means++', random_state=0).fit(df1)
+    inertia.append(kmeans.inertia_)
+    n_clusters.append(i)
+
+plt.plot(n_clusters,inertia, marker='o')
+plt.xlabel('Number of clusters')
+plt.ylabel('Distortion')
+plt.title("Inertia of K-means clustering")
+plt.show()
+
+df3 = data[features]
+df3_rs,m3,M3 = rescaleFeatures(df3)
+df3 = data.loc[:,features]
+
+k = 5
+kmeans3 = KMeans(n_clusters=k, init='k-means++', random_state=0).fit(df3_rs)
+
+centroids3 = upscaleCentroids(kmeans3.cluster_centers_,m3,M3)
+
+fig, axs = plt.subplots(1, 1, squeeze=False, figsize=(16,16)) # ,                        subplot_kw = dict(polar = True))
+
+axs[0,0].scatter(df3['FAT'], df3['ENERC_KCAL'],c=kmeans3.labels_)
+axs[0,0].scatter(centroids3[:,0], centroids3[:,1],marker="X", c="r", s=80, label="centroids")
+axs[0,0].set_title("Fat vs. Energy")
+axs[0,0].set_xlabel("Fat")
+axs[0,0].set_ylabel("Energy")
+
+fig.suptitle('Product differentiation')
+plt.show()
+
+k = 12
+kmeans3 = KMeans(n_clusters=k, init='k-means++', random_state=0).fit(df3_rs)
+centroids3 = upscaleCentroids(kmeans3.cluster_centers_,m3,M3)
+fig, axs = plt.subplots(1, 1, squeeze=False, figsize=(16,16)) # ,                        subplot_kw = dict(polar = True))
+
+axs[0,0].scatter(df3['FAT'], df3['ENERC_KCAL'],c=kmeans3.labels_)
+axs[0,0].scatter(centroids3[:,0], centroids3[:,1],marker="X", c="r", s=80, label="centroids")
+axs[0,0].set_title("Fat vs. Energy")
+axs[0,0].set_xlabel("Fat")
+axs[0,0].set_ylabel("Energy")
+
+fig.suptitle('Product differentiation')
+plt.show()
+
+k = 3
+kmeans3 = KMeans(n_clusters=k, init='k-means++', random_state=0).fit(df3_rs)
+centroids3 = upscaleCentroids(kmeans3.cluster_centers_,m3,M3)
+fig, axs = plt.subplots(1, 1, squeeze=False, figsize=(16,16)) # ,                        subplot_kw = dict(polar = True))
+
+axs[0,0].scatter(df3['FAT'], df3['ENERC_KCAL'],c=kmeans3.labels_)
+axs[0,0].scatter(centroids3[:,0], centroids3[:,1],marker="X", c="r", s=80, label="centroids")
+axs[0,0].set_title("Fat vs. Energy")
+axs[0,0].set_xlabel("Fat")
+axs[0,0].set_ylabel("Energy")
+
+
+fig.suptitle('Product differentiation')
+plt.show()
+
+
+
+
+
+
